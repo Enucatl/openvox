@@ -429,6 +429,92 @@ describe Puppet::X509::CertProvider do
         expect(File.read(path)).to match(/Proc-Type: 4,ENCRYPTED.*DEK-Info: AES-128-CBC/m)
       end
 
+      context 'ML-DSA-44 keys' do
+        let(:private_key) { OpenSSL::PKey.generate_key('ML-DSA-44') }
+
+        before do
+          skip 'ML-DSA requires OpenSSL 3.5+' if OpenSSL::OPENSSL_VERSION_NUMBER < 0x30500000
+        end
+
+        def persisted_seed
+          pem = File.read(path)
+          der = pem.lines.reject { |line| line.start_with?('-----') }.join.unpack1('m')
+          OpenSSL::ASN1.decode(OpenSSL::ASN1.decode(der).value[2].value)
+        end
+
+        it 'writes a seed-only input as an implicit 32-byte seed' do
+          info = OpenSSL::ASN1.decode(private_key.private_to_der)
+          info.value[2] = OpenSSL::ASN1::OctetString.new(OpenSSL::ASN1::ASN1Data.new('s' * 32, 0, :CONTEXT_SPECIFIC).to_der)
+          allow(private_key).to receive(:private_to_der).and_return(info.to_der)
+
+          provider.save_private_key(name, private_key)
+
+          expect(persisted_seed.tag_class).to eq(:CONTEXT_SPECIFIC)
+          expect(persisted_seed.tag).to eq(0)
+          expect(persisted_seed.value).to eq('s' * 32)
+        end
+
+        it 'rejects an unavailable or malformed seed without replacing an existing key' do
+          File.write(path, 'existing key')
+          info = OpenSSL::ASN1.decode(private_key.private_to_der)
+          [OpenSSL::ASN1::OctetString.new(private_key.raw_private_key),
+           OpenSSL::ASN1::ASN1Data.new('s' * 31, 0, :CONTEXT_SPECIFIC)].each do |payload|
+            info.value[2] = OpenSSL::ASN1::OctetString.new(payload.to_der)
+            allow(private_key).to receive(:private_to_der).and_return(info.to_der)
+
+            expect { provider.save_private_key(name, private_key) }.to raise_error(OpenSSL::PKey::PKeyError, /seed-only PKCS#8/)
+            expect(File.read(path)).to eq('existing key')
+          end
+        end
+
+        it 'preserves the existing key when the subprocess fails' do
+          File.write(path, 'existing key')
+          status = double('status', success?: false)
+          expect(Open3).to receive(:capture3).and_return(['partial output', 'failure', status])
+
+          expect { provider.save_private_key(name, private_key) }.to raise_error(OpenSSL::PKey::PKeyError, /seed-only PKCS#8/)
+          expect(File.read(path)).to eq('existing key')
+        end
+
+        it 'encrypts using a private password pipe and the bundled executable' do
+          password = 'x' * 1023
+          openssl = File.join(RbConfig::CONFIG['bindir'], 'openssl')
+          allow(File).to receive(:executable?).with(openssl).and_return(true)
+          expect(Open3).to receive(:capture3).with(
+            openssl, 'pkey', '-inform', 'DER', '-provparam', 'ml-dsa.output_formats=seed-only',
+            '-aes-128-cbc', '-passout', 'fd:3', anything
+          ).and_wrap_original do |_original, *_args, **options|
+            expect(options.fetch(3).read).to eq(password + "\n")
+            ['encrypted output', '', double('status', success?: true)]
+          end
+
+          provider.save_private_key(name, private_key, password: password)
+          expect(File.read(path)).to eq('encrypted output')
+        end
+
+        it 'rejects passphrases the CLI would truncate before starting a subprocess' do
+          File.write(path, 'existing key')
+          expect(Open3).not_to receive(:capture3)
+          ["line\nbreak", "carriage\rreturn", "null\0byte", 'x' * 1024].each do |password|
+            expect { provider.save_private_key(name, private_key, password: password) }.to raise_error(OpenSSL::PKey::PKeyError, /passphrase/)
+            expect(File.read(path)).to eq('existing key')
+          end
+        end
+
+        it 'rejects a loaded expanded-only key without replacing an existing key' do
+          info = OpenSSL::ASN1.decode(private_key.private_to_der)
+          info.value[2] = OpenSSL::ASN1::OctetString.new(OpenSSL::ASN1::OctetString.new(private_key.raw_private_key).to_der)
+          expanded_key = OpenSSL::PKey.read(info.to_der)
+          expect(expanded_key.public_to_der).to eq(private_key.public_to_der)
+          File.write(path, 'existing key')
+
+          [nil, 'test-password'].each do |password|
+            expect { provider.save_private_key(name, expanded_key, password: password) }.to raise_error(OpenSSL::PKey::PKeyError, /seed-only PKCS#8/)
+            expect(File.read(path)).to eq('existing key')
+          end
+        end
+      end
+
       it 'sets mode to 640' do
         provider.save_private_key(name, private_key)
 

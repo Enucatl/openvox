@@ -283,7 +283,7 @@ class Puppet::SSL::SSLProvider
   def resolve_client_chain(store, client_cert, private_key)
     client_chain = verify_cert_with_store(store, client_cert)
 
-    if !private_key.is_a?(OpenSSL::PKey::RSA) && !private_key.is_a?(OpenSSL::PKey::EC)
+    unless private_key.is_a?(OpenSSL::PKey::RSA) || private_key.is_a?(OpenSSL::PKey::EC) || Puppet::SSL.mldsa44_key?(private_key)
       raise Puppet::SSL::SSLError, _("Unsupported key '%{type}'") % { type: private_key.class.name }
     end
 

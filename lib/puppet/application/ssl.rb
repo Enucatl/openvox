@@ -386,7 +386,10 @@ class Puppet::Application::Ssl < Puppet::Application
   end
 
   def create_key(certname)
-    if Puppet[:key_type] == 'ec'
+    if Puppet[:key_type] == 'mldsa44'
+      Puppet.info _("Creating a new ML-DSA-44 SSL key for %{name}") % { name: certname }
+      OpenSSL::PKey.generate_key('ML-DSA-44')
+    elsif Puppet[:key_type] == 'ec'
       Puppet.info _("Creating a new EC SSL key for %{name} using curve %{curve}") % { name: certname, curve: Puppet[:named_curve] }
       OpenSSL::PKey::EC.generate(Puppet[:named_curve])
     else

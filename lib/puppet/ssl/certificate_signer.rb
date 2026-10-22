@@ -34,6 +34,6 @@ class Puppet::SSL::CertificateSigner
   #
   # @api private
   def sign(content, key)
-    content.sign(key, @digest.new)
+    content.sign(key, Puppet::SSL.mldsa44_key?(key) ? nil : @digest.new)
   end
 end

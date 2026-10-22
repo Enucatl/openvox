@@ -136,6 +136,9 @@ class Puppet::SSL::Base
       /sha\d*/i
     )
     ln = content.signature_algorithm
+    # ML-DSA has no external digest; use SHA256 for its displayed fingerprint.
+    return 'sha256' if ln == 'ML-DSA-44'
+
     match = digest_re.match(ln)
     if match
       match[0].downcase

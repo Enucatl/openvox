@@ -62,6 +62,7 @@ describe Puppet::SSL::Certificate do
     # Some known signature algorithms taken from RFC 3279, 5758, and browsing
     # objs_dat.h in openssl
     {
+      'ML-DSA-44' => 'sha256',
       'md5WithRSAEncryption' => 'md5',
       'sha1WithRSAEncryption' => 'sha1',
       'md4WithRSAEncryption' => 'md4',

@@ -77,6 +77,8 @@ project 'openvox-agent' do |proj|
   proj.description "The OpenVox Agent package contains all of the elements needed to run the agent, including ruby and openfact."
   if ENV['OPENVOX_AGENT_VERSION']
     proj.version ENV['OPENVOX_AGENT_VERSION']
+    # Vanagon adds the distribution suffix to this Debian revision.
+    proj.release '1' if platform.is_deb?
   else
     proj.version_from_git
   end

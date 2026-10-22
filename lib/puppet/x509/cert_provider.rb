@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../puppet/x509'
+require 'open3'
+require 'rbconfig'
 
 # Class for loading and saving cert related objects. By default the provider
 # loads and saves based on OpenVox's default settings, such as `Puppet[:localcacert]`.
@@ -184,7 +186,9 @@ class Puppet::X509::CertProvider
   #
   # @api private
   def save_private_key(name, key, password: nil)
-    pem = if password
+    pem = if Puppet::SSL.mldsa44_key?(key)
+            mldsa44_private_to_pem(key, password)
+          elsif password
             cipher = OpenSSL::Cipher.new('aes-128-cbc')
             key.export(cipher, password)
           else
@@ -392,6 +396,30 @@ class Puppet::X509::CertProvider
   end
 
   private
+
+  def mldsa44_private_to_pem(key, password)
+    # OpenSSL's CLI reads passphrases as a bounded, NUL-terminated line.
+    if password && (password.bytesize > 1023 || password.match?(/[\x00\r\n]/))
+      raise OpenSSL::PKey::PKeyError, 'ML-DSA passphrase must be at most 1023 bytes without NUL, CR or LF'
+    end
+
+    openssl = File.join(RbConfig::CONFIG['bindir'], 'openssl')
+    openssl = 'openssl' unless File.executable?(openssl)
+    command = [openssl, 'pkey',
+               '-inform', 'DER', '-provparam', 'ml-dsa.output_formats=seed-only']
+    IO.pipe do |reader, writer|
+      if password
+        writer.write(password + "\n")
+        command.concat(['-aes-128-cbc', '-passout', 'fd:3'])
+      end
+      writer.close
+      pem, _error, status = Open3.capture3(*command, 3 => reader, stdin_data: key.private_to_der)
+      unless status.success?
+        raise OpenSSL::PKey::PKeyError, 'OpenSSL failed to export ML-DSA-44 private key as seed-only PKCS#8'
+      end
+      pem
+    end
+  end
 
   def permissions_for_setting(name)
     setting = Puppet.settings.setting(name)

@@ -23,6 +23,8 @@ To install OpenVox,
 If you need to run OpenVox from source as a tester or developer,
 see the [Quick Start to Developing on OpenVox](docs/quickstart.md) guide.
 
+This fork also supports opt-in [ML-DSA-44 agent identities](docs/mldsa44.md).
+
 ## Developing and Contributing
 
 We'd love to get contributions from you! For a quick guide to getting your

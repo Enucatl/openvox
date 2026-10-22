@@ -156,6 +156,24 @@ jobs:
             bundle exec rake parallel:spec
           fi
 
+  mldsa_tests:
+    name: ML-DSA-44 native cryptographic checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run with packaged OpenSSL 3.5 runtime
+        run: |
+          docker run --rm -e DEBIAN_FRONTEND=noninteractive \
+            -v "$GITHUB_WORKSPACE:/work:ro" -w /work ubuntu:26.04 sh -ec '
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates curl
+              curl -fsSLo /tmp/openvox-release.deb https://apt.voxpupuli.org/openvox9-release-ubuntu26.04.deb
+              dpkg -i /tmp/openvox-release.deb
+              apt-get update
+              apt-get install -y --no-install-recommends openvox-agent=9.1.0-1+ubuntu26.04
+              /opt/puppetlabs/puppet/bin/ruby -Ilib spec/integration/ssl/mldsa_self_check.rb
+            '
+
   rake_checks:
     name: AIO Package Rake Checks
     runs-on: ubuntu-24.04
@@ -281,6 +299,7 @@ jobs:
       - checks
       - rake_checks
       - rspec_tests
+      - mldsa_tests
       - test_gem_build
       - test_install
       - validate_manpages

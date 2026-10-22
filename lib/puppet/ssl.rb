@@ -13,6 +13,12 @@ require_relative 'ssl/openssl_loader'
 module Puppet::SSL
   CA_NAME = "ca"
 
+  def self.mldsa44_key?(key)
+    # PKey#oid does not support ML-DSA in Ruby OpenSSL 4.0.2.
+    key.is_a?(OpenSSL::PKey::PKey) &&
+      OpenSSL::ASN1.decode(key.public_to_der).value[0].value[0].oid == '2.16.840.1.101.3.4.3.17'
+  end
+
   require_relative 'ssl/oids'
   require_relative 'ssl/error'
   require_relative 'ssl/ssl_context'

@@ -69,8 +69,8 @@ class Puppet::SSL::CertificateRequest < Puppet::SSL::Base
     csr.version = 0
     csr.subject = OpenSSL::X509::Name.new([["CN", common_name]])
 
-    csr.public_key = if key.is_a?(OpenSSL::PKey::EC)
-                       # EC#public_key doesn't follow the PKey API,
+    csr.public_key = if key.is_a?(OpenSSL::PKey::EC) || Puppet::SSL.mldsa44_key?(key)
+                       # EC#public_key differs from the PKey API; ML-DSA has no #public_key.
                        # see https://github.com/ruby/openssl/issues/29
                        key
                      else

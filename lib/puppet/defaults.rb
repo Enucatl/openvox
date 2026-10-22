@@ -1011,8 +1011,8 @@ EOT
     :key_type => {
       :default => 'rsa',
       :type    => :enum,
-      :values  => %w[rsa ec],
-      :desc    => "The type of private key. Valid values are `rsa` and `ec`. Default is `rsa`."
+      :values  => %w[rsa ec mldsa44],
+      :desc    => "The type of private key. Valid values are `rsa`, `ec`, and `mldsa44`. Default is `rsa`. ML-DSA-44 requires OpenSSL 3.5 or later."
     },
     :named_curve => {
       :default => 'prime256v1',
